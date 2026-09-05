@@ -58,6 +58,7 @@ const PENDING_KEY = 'dermatriaje_casos_pendientes';
 let modelPromise = null;
 let ultimoResultado = null;
 let pacienteEncontrado = null;
+let imagenParaGuardar = null; // data URL JPEG ya comprimida (preview, inferencia y guardado usan la misma)
 let toastTimeout = null;
 
 /* ============ Modelo / inferencia ============ */
@@ -78,6 +79,29 @@ function preprocessImage(imgEl) {
     });
 }
 
+/* ============ Compresion de imagen (antes de guardar/encolar) ============ */
+
+function comprimirImagen(file, maxAncho) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('No se pudo procesar la imagen.'));
+            img.onload = () => {
+                const escala = Math.min(1, maxAncho / img.width);
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * escala);
+                canvas.height = Math.round(img.height * escala);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 /* ============ Utilidades de red ============ */
 
 function getCookie(name) {
@@ -87,8 +111,10 @@ function getCookie(name) {
 
 async function apiFetch(url, options) {
     options = options || {};
+    const esFormData = options.body instanceof FormData;
     const headers = Object.assign(
-        { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        esFormData ? {} : { 'Content-Type': 'application/json' },
+        { 'X-CSRFToken': getCookie('csrftoken') },
         options.headers || {}
     );
 
@@ -164,6 +190,16 @@ function encolarCasoPendiente(payload) {
     guardarColaPendientes(cola);
 }
 
+async function construirFormDataCaso(campos, imagenDataUrl) {
+    const formData = new FormData();
+    Object.entries(campos).forEach(([clave, valor]) => {
+        formData.append(clave, clave === 'probabilidades_top3' ? JSON.stringify(valor) : valor);
+    });
+    const blob = await (await fetch(imagenDataUrl)).blob();
+    formData.append('imagen', blob, 'lesion.jpg');
+    return formData;
+}
+
 async function sincronizarPendientes() {
     const cola = leerColaPendientes();
     if (cola.length === 0) return;
@@ -171,7 +207,9 @@ async function sincronizarPendientes() {
     const restantes = [];
     for (const payload of cola) {
         try {
-            await apiFetch('/api/casos-triaje/', { method: 'POST', body: JSON.stringify(payload) });
+            const { imagen_base64: imagenBase64, ...campos } = payload;
+            const formData = await construirFormDataCaso(campos, imagenBase64);
+            await apiFetch('/api/casos-triaje/', { method: 'POST', body: formData });
         } catch (err) {
             restantes.push(payload);
         }
@@ -336,6 +374,7 @@ function volverAHomeTrasGuardar(profesionalId) {
     document.getElementById('previewSection').style.display = 'none';
     document.getElementById('uploadZone').style.display = 'block';
     document.getElementById('imageInput').value = '';
+    imagenParaGuardar = null;
     cargarUltimasEvaluaciones(profesionalId);
 }
 
@@ -362,9 +401,13 @@ async function guardarCaso() {
         mostrarMensajeGuardado('Primero analiza una imagen con IA.');
         return;
     }
+    if (!imagenParaGuardar) {
+        mostrarMensajeGuardado('Primero captura o sube una imagen.');
+        return;
+    }
 
     const top = ultimoResultado[0];
-    const payload = {
+    const campos = {
         paciente: pacienteEncontrado.id,
         profesional_creador: parseInt(profesionalId, 10),
         establecimiento: parseInt(establecimientoId, 10),
@@ -380,12 +423,13 @@ async function guardarCaso() {
     btn.textContent = 'Guardando...';
 
     try {
-        const caso = await apiFetch('/api/casos-triaje/', { method: 'POST', body: JSON.stringify(payload) });
+        const formData = await construirFormDataCaso(campos, imagenParaGuardar);
+        const caso = await apiFetch('/api/casos-triaje/', { method: 'POST', body: formData });
         mostrarToast('Caso guardado correctamente', `Caso #${caso.id} · guardado y sincronizado`);
         volverAHomeTrasGuardar(profesionalId);
     } catch (err) {
         if (err.isNetworkError || !navigator.onLine) {
-            encolarCasoPendiente(payload);
+            encolarCasoPendiente({ ...campos, imagen_base64: imagenParaGuardar });
             mostrarToast('Caso priorizado', 'Guardado localmente · se enviará cuando haya conexión');
             volverAHomeTrasGuardar(profesionalId);
         } else {
@@ -434,15 +478,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function showPreview(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            previewImage.src = e.target.result;
+    async function showPreview(file) {
+        try {
+            imagenParaGuardar = await comprimirImagen(file, 900);
+            previewImage.src = imagenParaGuardar;
             uploadZone.style.display = 'none';
             previewSection.style.display = 'block';
             previewSection.classList.add('fade-in');
-        };
-        reader.readAsDataURL(file);
+        } catch (err) {
+            alert('No se pudo procesar la imagen: ' + err.message);
+        }
     }
 
     if (cancelBtn) {
@@ -450,6 +495,7 @@ document.addEventListener('DOMContentLoaded', () => {
             previewSection.style.display = 'none';
             uploadZone.style.display = 'block';
             imageInput.value = '';
+            imagenParaGuardar = null;
         });
     }
 
