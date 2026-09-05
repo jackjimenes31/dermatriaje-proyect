@@ -4,11 +4,28 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 
+from interconsulta.models import Profesional
+
+
+def _es_especialista(user):
+    profesional = getattr(user, 'profesional', None)
+    return profesional is not None and profesional.rol == Profesional.Rol.ESPECIALISTA
+
 
 @login_required
 def index(request):
-    """App Shell principal de la PWA."""
+    """App Shell principal de la PWA (flujo de captura/clasificación del médico general)."""
+    if _es_especialista(request.user):
+        return redirect('especialista')
     return render(request, 'core/index.html')
+
+
+@login_required
+def especialista_view(request):
+    """Bandeja de interconsulta del especialista."""
+    if not _es_especialista(request.user):
+        return redirect('index')
+    return render(request, 'core/especialista.html')
 
 
 def login_view(request):
