@@ -1,103 +1,177 @@
-# DermaTriaje
+# DermaTriaje API & PWA
 
-Progressive Web App (PWA) que clasifica lesiones cutáneas a partir de una fotografía, pensada para el personal de salud del primer nivel de atención en Perú (postas y centros de salud). El modelo de IA corre en el navegador (Edge AI, offline-first) y los casos se registran en un backend Django con una cola digital de interconsulta hacia especialistas.
+[![CI](https://github.com/jackjimenes31/dermatriaje-api/actions/workflows/ci.yml/badge.svg)](https://github.com/jackjimenes31/dermatriaje-api/actions)
+![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
+![Django](https://img.shields.io/badge/Django-6.1-green.svg)
+![DRF](https://img.shields.io/badge/Django_REST_Framework-3.18-red.svg)
+![Testing](https://img.shields.io/badge/PyTest-13%2F13_Passed-success.svg)
+![Deploy](https://img.shields.io/badge/Deploy-Render_Active-brightgreen.svg)
 
-## Stack
+**DermaTriaje** es una Progressive Web App (PWA) de tele-interconsulta y triaje dermatológico asistido por Inteligencia Artificial (*Edge AI*, offline-first) diseñada para el personal de salud del primer nivel de atención en Perú (postas y centros de salud I-1 a I-4).
 
-- **Backend**: Django 6.1.1 + Django REST Framework
-- **Base de datos**: SQLite por defecto, configurable a Postgres vía la variable de entorno `DATABASE_URL` (usando `django-environ`)
-- **Autenticación**: sesión (login web) y token (DRF `TokenAuthentication`) para la API
-- **Frontend**: PWA renderizada por Django (app `core`), con manifest y Service Worker offline-first
-- **IA**: [Skin-Lesion-Classifier](https://github.com/uyxela/Skin-Lesion-Classifier) (MobileNet reentrenado sobre HAM10000, 7 clases), convertido a TensorFlow.js y ejecutado 100% en el navegador
-- **Tests**: pytest + pytest-django
-- **CI**: GitHub Actions
+El sistema ejecuta el modelo de clasificación de lesiones en el navegador del usuario garantizando privacidad y resiliencia sin conectividad, y sincroniza los casos clínicos hacia un backend Django con una cola digital de interconsulta para especialistas.
 
-## Estructura del proyecto
+---
 
+## 📌 Entregables Oficiales
+
+* 🌐 **URL de Producción Activa:** [https://dermatriaje-proyect.onrender.com/](https://dermatriaje-proyect.onrender.com/)
+* 📊 **Deck de Presentación (Pitch):** [`docs/pitch.pdf`](docs/pitch.pdf)
+* 📋 **Especificación Técnica de la API:** [`endpoints_spec.md`](endpoints_spec.md)
+* 🧪 **Suite de Pruebas Automáticas (Testing Core):** [`test/`](test/) (13/13 pruebas aprobadas)
+
+---
+
+## 🏗️ Arquitectura del Sistema
+
+* **Backend:** Django 6.1 + Django REST Framework + Gunicorn + WhiteNoise.
+* **Base de Datos:** SQLite en local, compatible con PostgreSQL en producción mediante la variable de entorno `DATABASE_URL` (vía `django-environ`).
+* **Frontend / PWA:** Renderizado por Django (`core`), HTML5 semántico, CSS responsivo y Service Worker con soporte offline (*cache-first / fallback*).
+* **Inteligencia Artificial (Edge AI):** Clasificador [Skin-Lesion-Classifier](https://github.com/uyxela/Skin-Lesion-Classifier) basado en MobileNet reentrenado sobre HAM10000 (7 clases de lesiones cutáneas), convertido a TensorFlow.js. Se ejecuta al 100% en el cliente, protegiendo la privacidad del paciente y operando aun sin conexión a internet.
+* **Autenticación:**
+  * **Sesión Web:** Login/Registro estándar para el flujo de la PWA.
+  * **Token DRF:** `POST /api/auth/login/` con `TokenAuthentication` para integración de clientes externos.
+* **Integración Continua:** GitHub Actions (`.github/workflows/ci.yml`) ejecutando la suite completa de pruebas en cada `push` y `pull request`.
+
+---
+
+## 📂 Estructura del Repositorio
+
+```text
+dermatriaje-api/
+├── .github/workflows/ci.yml   # Pipeline de Integración Continua (GitHub Actions)
+├── core/                      # PWA shell, autenticación web, templates y vistas
+├── dermatriaje/               # Configuración del proyecto (settings, urls, wsgi)
+├── docs/                      # Entregables anexos (pitch.pdf)
+├── interconsulta/             # Dominio clínico: modelos, serializers, vistas y signals
+├── static/                    # Archivos estáticos, Service Worker y modelo TF.js HAM10000
+├── test/                      # Suite de pruebas automatizadas (pytest)
+│   ├── test_integration.py   # Pruebas de integración E2E (Happy path y Errores críticos)
+│   ├── test_unit.py          # Pruebas unitarias de modelos y validaciones
+│   └── test_setup.py         # Smoke test del entorno de pruebas
+├── endpoints_spec.md          # Especificación detallada de endpoints, payloads y respuestas
+├── manage.py                  # CLI de gestión de Django
+├── Procfile                   # Definición del proceso de ejecución para producción (Gunicorn)
+├── pytest.ini                 # Configuración de PyTest y Django Settings
+└── requirements.txt           # Dependencias de producción y testing
 ```
-dermatriaje/       Configuración del proyecto (settings, urls, pytest.ini)
-core/               PWA shell, login/registro/logout, manifest y service worker
-interconsulta/      Dominio clínico: modelos, API REST y admin
-static/             CSS, JS, iconos, manifest, service worker y el modelo TF.js
-test/               Suite de pytest a nivel de proyecto
-```
 
-## Apps de Django
+---
 
-### `core`
+## 🧪 Testing Core (Pruebas Automáticas)
 
-Shell de la PWA y autenticación de usuarios (médicos/serumistas):
+El proyecto cuenta con una suite rigurosa de **13 pruebas automatizadas** que validan tanto el comportamiento esperado como la robustez ante fallos críticos:
 
-- `/` — pantalla principal (requiere login): captura/subida de foto, clasificación con IA y registro del caso.
-- `/login/`, `/registro/`, `/logout/` — autenticación por sesión con los formularios estándar de Django.
-- `/offline/` — página de respaldo cuando no hay conexión (usada por el service worker).
+### 1. Camino Feliz (Happy Path)
+* **Creación de Paciente:** Registro vía API (`POST /api/pacientes/`) con datos válidos, validando persistencia y código de estado `201 Created`.
+* **Registro de Caso de Triaje con IA:** Creación de caso (`POST /api/casos-triaje/`) con predicción del modelo y validación del cálculo automático del campo calculado `riesgo_sugerido` (`mel` ➔ `ALTO`).
 
-Al registrarse un usuario nuevo, una señal en `interconsulta` le crea automáticamente un perfil `Profesional` (rol `MEDICO_GENERAL` por defecto).
+### 2. Casos de Error Crítico
+* **Validación Estricta de Documento de Identidad:** Rechazo con `HTTP 400 Bad Request` ante DNIs que no cumplan con exactamente 8 dígitos numéricos o Carnés de Extranjería inválidos, impidiendo la corrupción de la identidad clínica.
+* **Integridad Referencial (Paciente Inexistente):** Rechazo con `HTTP 400 Bad Request` al intentar registrar un caso de triaje asociado a un paciente que no existe, evitando casos clínicos huérfanos.
 
-### `interconsulta`
+### 3. Pruebas Unitarias de Lógica de Negocio
+* Validación del método `clean()` de los modelos de pacientes bajo expresiones regulares.
+* Mapeo del riesgo sugerido por tipo de lesión (`mel`, `bcc`, `akiec` ➔ `ALTO`, `bkl` ➔ `MEDIO`, `nv`, `df`, `vasc` ➔ `BAJO`).
+* Creación reactiva del perfil `Profesional` tras el registro de usuarios mediante `post_save signals`.
 
-Dominio clínico y API REST:
-
-- **`EstablecimientoSalud`** — posta/centro de salud (nivel I-1 a I-4, ubicación).
-- **`Profesional`** — perfil asociado a `auth.User` (rol: médico general, serumista o especialista; establecimiento).
-- **`Paciente`** — identidad del paciente (DNI o Carné de Extranjería, con validación de formato; nombres/apellidos; edad; sexo).
-- **`CasoTriaje`** — un caso de triaje: tipo de lesión predicho por el modelo (una de las 7 clases de HAM10000), confianza, top-3 de predicciones, clasificación de riesgo confirmada, estado y quién resuelve el caso.
-- **`ColaInterconsulta`** — cola de interconsulta hacia especialistas (prioridad, especialista asignado, estado).
-
-## Instalación y ejecución local
-
+### Ejecución de Pruebas:
 ```bash
-python -m venv venv
-venv\Scripts\activate        # Windows
-pip install -r requirements.txt
+# Ejecutar toda la suite con detalle:
+pytest -v
 
-copy .env.example .env       # y ajusta valores si hace falta
-
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
+# Ejecutar con reporte de cobertura de código:
+pytest --cov=interconsulta --cov=core
 ```
 
-La app queda disponible en `http://127.0.0.1:8000/`.
+---
 
-## Autenticación
+## 🚀 Puesta en Marcha Local
 
-- **Web (sesión)**: registrarse/loguearse en `/registro/` o `/login/`. Esta sesión ya sirve para llamar a la API desde la propia PWA (autenticación por cookie + CSRF).
-- **API (token)**: `POST /api/auth/login/` con `username` y `password` devuelve un token para usar como header `Authorization: Token <token>`.
+### Prerrequisitos
+* Python 3.13+ instalado.
+* Git.
 
-Todos los endpoints de `/api/` requieren autenticación (token o sesión).
+### Pasos:
 
-## API REST
+1. **Clonar el repositorio:**
+   ```bash
+   git clone https://github.com/jackjimenes31/dermatriaje-api.git
+   cd dermatriaje-api
+   ```
 
-Expuesta bajo `/api/` mediante un `DefaultRouter` de DRF:
+2. **Crear y activar el entorno virtual:**
+   ```bash
+   # En Windows:
+   python -m venv venv
+   .\venv\Scripts\activate
 
-| Endpoint | Recurso |
-|---|---|
-| `/api/establecimientos/` | `EstablecimientoSalud` |
-| `/api/profesionales/` | `Profesional` |
-| `/api/pacientes/` | `Paciente` |
-| `/api/casos-triaje/` | `CasoTriaje` |
-| `/api/cola-interconsulta/` | `ColaInterconsulta` |
+   # En Linux / macOS:
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
-Todos soportan las operaciones estándar de un `ModelViewSet` (list, retrieve, create, update, delete).
+3. **Instalar dependencias:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Clasificación con IA
+4. **Variables de entorno:**
+   ```bash
+   # Copiar la plantilla de configuración
+   cp .env.example .env     # Linux / macOS
+   copy .env.example .env   # Windows
+   ```
 
-En la pantalla principal (`/`), el flujo es:
+5. **Aplicar migraciones y crear superusuario:**
+   ```bash
+   python manage.py migrate
+   python manage.py createsuperuser
+   ```
 
-1. Se toma o sube una foto de la lesión.
-2. `static/js/triaje.js` carga el modelo TensorFlow.js (`static/models/skin-lesion/`) directamente en el navegador y corre la inferencia sobre la imagen — sin enviarla a ningún servidor.
-3. Se muestra el tipo de lesión predicho, la confianza y el top-3 de predicciones del modelo.
-4. Se completa un formulario con los datos del paciente y se guarda el caso vía la API (`/api/pacientes/` y `/api/casos-triaje/`), usando la sesión del profesional logueado.
+6. **Iniciar el servidor de desarrollo:**
+   ```bash
+   python manage.py runserver
+   ```
+   Accede a la aplicación en: `http://127.0.0.1:8000/`.
 
-## Tests
+---
 
-La configuración de pytest está en `dermatriaje/pytest.ini`. Desde la raíz del repo:
+## 🌐 Despliegue en Producción (Render)
 
-```bash
-pytest
-```
+El repositorio está configurado y optimizado para despliegue continuo en la nube con **Render**:
 
-## CI
+* **Procfile:**
+  ```text
+  web: gunicorn dermatriaje.wsgi:application
+  ```
+* **Build Command:**
+  ```bash
+  pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
+  ```
+* **Start Command:**
+  ```bash
+  gunicorn dermatriaje.wsgi:application
+  ```
+* **Archivos Estáticos:** Servidos y comprimidos en producción mediante `WhiteNoise` (`CompressedManifestStaticFilesStorage`).
+* **Variables de Entorno Clave:**
+  * `DEBUG=False`
+  * `SECRET_KEY=<tu_clave_segura>`
+  * `ALLOWED_HOSTS=.onrender.com,localhost,127.0.0.1`
 
-`.github/workflows/ci.yml` corre en cada push y pull request: instala las dependencias de `requirements.txt` y ejecuta `pytest` sobre Python 3.13.
+---
+
+## 📡 Resumen de Endpoints Principales
+
+Todos los endpoints REST se encuentran bajo `/api/` y requieren autenticación (`Token` o sesión activa):
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `POST` | `/api/auth/login/` | Autenticación y obtención de token de acceso |
+| `GET`, `POST` | `/api/pacientes/` | Listado y registro de pacientes con validación de documento |
+| `GET`, `POST` | `/api/casos-triaje/` | Registro de triajes asistidos por IA y evaluación de riesgo |
+| `GET`, `POST` | `/api/cola-interconsulta/` | Gestión de la cola de tele-interconsulta hacia especialistas |
+| `GET`, `POST` | `/api/establecimientos/` | Centros de salud y postas del primer nivel |
+| `GET`, `POST` | `/api/profesionales/` | Perfiles de médicos generales, serumistas y especialistas |
+
+Para el detalle completo de campos, validaciones y ejemplos JSON, consulta [`endpoints_spec.md`](endpoints_spec.md).
