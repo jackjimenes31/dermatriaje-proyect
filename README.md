@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![Django](https://img.shields.io/badge/Django-6.1-green.svg)
 ![DRF](https://img.shields.io/badge/Django_REST_Framework-3.18-red.svg)
-![Testing](https://img.shields.io/badge/PyTest-13%2F13_Passed-success.svg)
+![Testing](https://img.shields.io/badge/PyTest-26%2F26_Passed-success.svg)
 ![Deploy](https://img.shields.io/badge/Deploy-Render_Active-brightgreen.svg)
 
 **DermaTriaje** es una Progressive Web App (PWA) de tele-interconsulta y triaje dermatológico asistido por Inteligencia Artificial (*Edge AI*, offline-first) diseñada para el personal de salud del primer nivel de atención en Perú (postas y centros de salud I-1 a I-4).
@@ -18,7 +18,7 @@ El sistema ejecuta el modelo de clasificación de lesiones en el navegador del u
 * 🌐 **URL de Producción Activa:** [https://dermatriaje-proyect.onrender.com/](https://dermatriaje-proyect.onrender.com/)
 * 📊 **Deck de Presentación (Pitch):** [`docs/pitch.pdf`](docs/pitch.pdf)
 * 📋 **Especificación Técnica de la API:** [`endpoints_spec.md`](endpoints_spec.md)
-* 🧪 **Suite de Pruebas Automáticas (Testing Core):** [`test/`](test/) (13/13 pruebas aprobadas)
+* 🧪 **Suite de Pruebas Automáticas (Testing Core):** [`test/`](test/) (26/26 pruebas aprobadas)
 
 ---
 
