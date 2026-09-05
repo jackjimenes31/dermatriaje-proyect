@@ -49,6 +49,29 @@ class CasoTriajeViewSet(viewsets.ModelViewSet):
     queryset = CasoTriaje.objects.all()
     serializer_class = CasoTriajeSerializer
 
+    @action(detail=True, methods=['post'])
+    def resolver_local(self, request, pk=None):
+        """
+        Cierra en el mismo nivel un caso de riesgo bajo (nunca pasó por
+        interconsulta). Solo el profesional que lo creó puede cerrarlo, y solo
+        si sigue REGISTRADO (un caso ya derivado o ya resuelto no se toca acá).
+        """
+        caso = self.get_object()
+        profesional = getattr(request.user, 'profesional', None)
+        if profesional is None or profesional.id != caso.profesional_creador_id:
+            return Response(
+                {'detail': 'Solo el profesional que registró el caso puede resolverlo localmente.'},
+                status=403,
+            )
+        if caso.estado != CasoTriaje.Estado.REGISTRADO:
+            return Response({'detail': 'Este caso ya no está pendiente de resolución local.'}, status=400)
+
+        caso.estado = CasoTriaje.Estado.RESUELTO_LOCAL
+        caso.profesional_resuelve = profesional
+        caso.fecha_resolucion = timezone.now()
+        caso.save()
+        return Response(self.get_serializer(caso).data)
+
 
 class ColaInterconsultaViewSet(viewsets.ModelViewSet):
     queryset = ColaInterconsulta.objects.all()

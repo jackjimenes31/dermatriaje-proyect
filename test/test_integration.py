@@ -276,6 +276,60 @@ def test_caso_riesgo_bajo_no_se_encola(api_client, paciente, profesional, establ
 
 
 @pytest.mark.django_db
+def test_medico_resuelve_localmente_caso_bajo(api_client, paciente, profesional, establecimiento):
+    """El médico que registró un caso BAJO puede cerrarlo en el mismo nivel."""
+    payload = _payload_caso(paciente, profesional, establecimiento, "nv", "BAJO")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
+    caso_id = response.data["id"]
+
+    response_resolver = api_client.post(f"/api/casos-triaje/{caso_id}/resolver_local/")
+
+    assert response_resolver.status_code == status.HTTP_200_OK
+    assert response_resolver.data["estado"] == "RESUELTO_LOCAL"
+
+    caso = CasoTriaje.objects.get(pk=caso_id)
+    assert caso.profesional_resuelve_id == profesional.id
+    assert caso.fecha_resolucion is not None
+
+
+@pytest.mark.django_db
+def test_otro_medico_no_puede_resolver_localmente_caso_ajeno(
+    api_client, paciente, profesional, establecimiento
+):
+    """
+    Solo el profesional que registró el caso puede cerrarlo localmente: si
+    cualquiera pudiera hacerlo, un caso quedaría "resuelto" sin que quien lo
+    vio al paciente lo haya confirmado.
+    """
+    otro_user = User.objects.create_user(username="medico_otro", password="pass123")
+    api_client_otro = APIClient()
+    api_client_otro.force_authenticate(user=otro_user)
+
+    payload = _payload_caso(paciente, profesional, establecimiento, "nv", "BAJO")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
+    caso_id = response.data["id"]
+
+    response_resolver = api_client_otro.post(f"/api/casos-triaje/{caso_id}/resolver_local/")
+
+    assert response_resolver.status_code == status.HTTP_403_FORBIDDEN
+    assert CasoTriaje.objects.get(pk=caso_id).estado == "REGISTRADO"
+
+
+@pytest.mark.django_db
+def test_no_se_puede_resolver_localmente_un_caso_ya_derivado(
+    api_client, paciente, profesional, establecimiento, especialista
+):
+    """Un caso ALTO ya en interconsulta no se puede cerrar por la vía local."""
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
+    caso_id = response.data["id"]
+
+    response_resolver = api_client.post(f"/api/casos-triaje/{caso_id}/resolver_local/")
+
+    assert response_resolver.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
 def test_asignacion_automatica_por_menor_carga(
     api_client, paciente, profesional, establecimiento, especialista
 ):
