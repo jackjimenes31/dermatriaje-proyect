@@ -44,7 +44,7 @@ dermatriaje-api/
 ├── .github/workflows/ci.yml   # Pipeline de Integración Continua (GitHub Actions)
 ├── core/                      # PWA shell, autenticación web, templates y vistas
 ├── dermatriaje/               # Configuración del proyecto (settings, urls, wsgi)
-├── docs/                      # Entregables anexos (pitch.pdf)
+├── docs/                      # Entregables anexos (pitch.md)
 ├── interconsulta/             # Dominio clínico: modelos, serializers, vistas y signals
 ├── static/                    # Archivos estáticos, Service Worker y modelo TF.js HAM10000
 ├── test/                      # Suite de pruebas automatizadas (pytest)
@@ -125,10 +125,12 @@ pytest --cov=interconsulta --cov=core
    copy .env.example .env   # Windows
    ```
 
-5. **Aplicar migraciones y crear superusuario:**
+5. **Aplicar migraciones y sembrar datos base:**
    ```bash
    python manage.py migrate
-   python manage.py createsuperuser
+   python manage.py seed   # crea admin/admin123, establecimientos, un medico general
+                           # y un especialista de ejemplo, y pacientes de ejemplo.
+                           # Es idempotente: se puede correr las veces que sea.
    ```
 
 6. **Iniciar el servidor de desarrollo:**
@@ -143,18 +145,12 @@ pytest --cov=interconsulta --cov=core
 
 El repositorio está configurado y optimizado para despliegue continuo en la nube con **Render**:
 
-* **Procfile:**
-  ```text
-  web: gunicorn dermatriaje.wsgi:application
-  ```
+* **Procfile:** el proceso `web` corre `migrate` y crea/actualiza el superusuario `admin` antes de levantar Gunicorn (ver [`Procfile`](Procfile) para el comando exacto).
 * **Build Command:**
   ```bash
-  pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
+  pip install -r requirements.txt && python manage.py collectstatic --no-input
   ```
-* **Start Command:**
-  ```bash
-  gunicorn dermatriaje.wsgi:application
-  ```
+* Para tener también los establecimientos, el médico general, el especialista y los pacientes de ejemplo en el ambiente desplegado, corre manualmente `python manage.py seed` (ver [Puesta en Marcha Local](#-puesta-en-marcha-local)) — hoy no está enganchado al Procfile.
 * **Archivos Estáticos:** Servidos y comprimidos en producción mediante `WhiteNoise` (`CompressedManifestStaticFilesStorage`).
 * **Variables de Entorno Clave:**
   * `DEBUG=False`
@@ -171,8 +167,13 @@ Todos los endpoints REST se encuentran bajo `/api/` y requieren autenticación (
 |---|---|---|
 | `POST` | `/api/auth/login/` | Autenticación y obtención de token de acceso |
 | `GET`, `POST` | `/api/pacientes/` | Listado y registro de pacientes con validación de documento |
-| `GET`, `POST` | `/api/casos-triaje/` | Registro de triajes asistidos por IA y evaluación de riesgo |
-| `GET`, `POST` | `/api/cola-interconsulta/` | Gestión de la cola de tele-interconsulta hacia especialistas |
+| `GET` | `/api/pacientes/buscar/?tipo_documento=&numero_documento=` | Búsqueda de paciente por documento (DNI/CE) |
+| `GET`, `POST` | `/api/casos-triaje/` | Registro de triajes asistidos por IA (imagen obligatoria, `multipart/form-data`) y evaluación de riesgo |
+| `POST` | `/api/casos-triaje/{id}/resolver_local/` | El médico creador cierra en el mismo nivel un caso de riesgo bajo |
+| `GET`, `POST` | `/api/cola-interconsulta/` | Gestión de la cola de tele-interconsulta, ordenada por prioridad |
+| `GET` | `/api/cola-interconsulta/mia/` | Bandeja del especialista autenticado |
+| `POST` | `/api/cola-interconsulta/{id}/atender/` | El especialista toma un caso de su bandeja |
+| `POST` | `/api/cola-interconsulta/{id}/resolver/` | El especialista cierra la interconsulta con su diagnóstico |
 | `GET`, `POST` | `/api/establecimientos/` | Centros de salud y postas del primer nivel |
 | `GET`, `POST` | `/api/profesionales/` | Perfiles de médicos generales, serumistas y especialistas |
 
