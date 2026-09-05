@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 
 from interconsulta.models import (
     CasoTriaje,
+    ColaInterconsulta,
     EstablecimientoSalud,
     Paciente,
     Profesional,
@@ -70,6 +71,34 @@ def paciente(db):
         edad=45,
         sexo="M",
     )
+
+
+def _crear_especialista(username):
+    """
+    El signal crear_perfil_profesional ya crea un Profesional(MEDICO_GENERAL)
+    apenas se crea el User, así que aquí solo lo ajustamos a ESPECIALISTA en
+    vez de intentar crear uno nuevo (rompería el OneToOne).
+    """
+    user = User.objects.create_user(username=username, password="pass123")
+    profesional = getattr(user, "profesional", None)
+    if profesional is None:
+        profesional = Profesional.objects.create(user=user, rol="ESPECIALISTA")
+    else:
+        profesional.rol = "ESPECIALISTA"
+        profesional.save()
+    return profesional
+
+
+@pytest.fixture
+def especialista(db, establecimiento):
+    return _crear_especialista("especialista1")
+
+
+@pytest.fixture
+def api_client_especialista(especialista):
+    client = APIClient()
+    client.force_authenticate(user=especialista.user)
+    return client
 
 
 # ---------------------------------------------------------------------------
@@ -177,3 +206,170 @@ def test_crear_caso_triaje_paciente_inexistente_error_critico(
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "paciente" in response.data
     assert CasoTriaje.objects.count() == 0
+
+
+# ---------------------------------------------------------------------------
+# COLA DE INTERCONSULTA
+# ---------------------------------------------------------------------------
+
+def _payload_caso(paciente, profesional, establecimiento, tipo_lesion, riesgo):
+    return {
+        "paciente": paciente.id,
+        "profesional_creador": profesional.id,
+        "establecimiento": establecimiento.id,
+        "tipo_lesion_predicho": tipo_lesion,
+        "confianza_modelo": 0.9,
+        "clasificacion_riesgo": riesgo,
+    }
+
+
+@pytest.mark.django_db
+def test_caso_riesgo_alto_encola_automaticamente(
+    api_client, paciente, profesional, establecimiento, especialista
+):
+    """
+    Un caso ALTO debe encolarse solo, con prioridad URGENTE, y el CasoTriaje
+    debe pasar a EN_COLA_INTERCONSULTA (aunque la respuesta del POST siga
+    mostrando el estado previo a la actualización, ver test happy path).
+    """
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    caso_id = response.data["id"]
+
+    cola = ColaInterconsulta.objects.get(caso_id=caso_id)
+    assert cola.prioridad == "URGENTE"
+    assert cola.especialista_asignado_id == especialista.id
+    assert CasoTriaje.objects.get(pk=caso_id).estado == "EN_COLA_INTERCONSULTA"
+
+
+@pytest.mark.django_db
+def test_caso_riesgo_bajo_no_se_encola(api_client, paciente, profesional, establecimiento):
+    """Un caso BAJO se resuelve en el mismo nivel: no debe generar interconsulta."""
+    payload = _payload_caso(paciente, profesional, establecimiento, "nv", "BAJO")
+    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    caso_id = response.data["id"]
+
+    assert not ColaInterconsulta.objects.filter(caso_id=caso_id).exists()
+    assert CasoTriaje.objects.get(pk=caso_id).estado == "REGISTRADO"
+
+
+@pytest.mark.django_db
+def test_asignacion_automatica_por_menor_carga(
+    api_client, paciente, profesional, establecimiento, especialista
+):
+    """
+    Si un especialista ya tiene un caso en espera, el siguiente caso ALTO debe
+    asignarse al especialista con menos carga, no al ya ocupado.
+    """
+    especialista_ocupado = _crear_especialista("especialista2")
+    caso_previo = CasoTriaje.objects.create(
+        paciente=paciente,
+        profesional_creador=profesional,
+        establecimiento=establecimiento,
+        tipo_lesion_predicho="nv",
+        confianza_modelo=0.8,
+        clasificacion_riesgo="BAJO",  # no dispara el signal de encolamiento
+    )
+    ColaInterconsulta.objects.create(
+        caso=caso_previo,
+        prioridad="URGENTE",
+        especialista_asignado=especialista_ocupado,
+        estado="EN_ESPERA",
+    )
+
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    caso_id = response.data["id"]
+
+    cola = ColaInterconsulta.objects.get(caso_id=caso_id)
+    assert cola.especialista_asignado_id == especialista.id
+
+
+@pytest.mark.django_db
+def test_cola_ordenada_por_prioridad(api_client, paciente, profesional, establecimiento):
+    """La cola debe devolver primero URGENTE aunque se haya creado después que ALTA."""
+    payload_medio = _payload_caso(paciente, profesional, establecimiento, "bkl", "MEDIO")
+    api_client.post("/api/casos-triaje/", payload_medio, format="json")
+
+    payload_alto = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response_alto = api_client.post("/api/casos-triaje/", payload_alto, format="json")
+    caso_alto_id = response_alto.data["id"]
+
+    response = api_client.get("/api/cola-interconsulta/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data[0]["prioridad"] == "URGENTE"
+    assert response.data[0]["caso"] == caso_alto_id
+
+
+@pytest.mark.django_db
+def test_especialista_atiende_y_resuelve_caso(
+    api_client, api_client_especialista, paciente, profesional, establecimiento, especialista
+):
+    """Loop completo: atender pasa a EN_ATENCION, resolver cierra cola y caso."""
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    caso_id = response.data["id"]
+    cola_id = ColaInterconsulta.objects.get(caso_id=caso_id).id
+
+    response_atender = api_client_especialista.post(f"/api/cola-interconsulta/{cola_id}/atender/")
+    assert response_atender.status_code == status.HTTP_200_OK
+    assert response_atender.data["estado"] == "EN_ATENCION"
+
+    response_resolver = api_client_especialista.post(
+        f"/api/cola-interconsulta/{cola_id}/resolver/",
+        {"observaciones_especialista": "Biopsia recomendada"},
+        format="json",
+    )
+    assert response_resolver.status_code == status.HTTP_200_OK
+    assert response_resolver.data["estado"] == "RESUELTO"
+
+    caso = CasoTriaje.objects.get(pk=caso_id)
+    assert caso.estado == "RESUELTO_INTERCONSULTA"
+    assert caso.profesional_resuelve_id == especialista.id
+    assert caso.fecha_resolucion is not None
+
+
+# ---------------------------------------------------------------------------
+# COLA DE INTERCONSULTA — CASOS DE ERROR CRÍTICO
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_medico_general_no_puede_atender_interconsulta(
+    api_client, paciente, profesional, establecimiento, especialista
+):
+    """
+    Solo un especialista puede atender la cola. Si un médico general pudiera
+    hacerlo, se rompe la separación de responsabilidades del triaje escalonado.
+    """
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    cola_id = ColaInterconsulta.objects.get(caso_id=response.data["id"]).id
+
+    response_atender = api_client.post(f"/api/cola-interconsulta/{cola_id}/atender/")
+
+    assert response_atender.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_especialista_no_asignado_no_puede_resolver(
+    api_client, paciente, profesional, establecimiento, especialista
+):
+    """
+    Un especialista distinto al asignado no puede resolver el caso de otro:
+    si lo hiciera, dos especialistas podrían pisarse el diagnóstico del mismo
+    paciente.
+    """
+    otro_especialista = _crear_especialista("especialista3")
+    api_client_otro = APIClient()
+    api_client_otro.force_authenticate(user=otro_especialista.user)
+
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    cola_id = ColaInterconsulta.objects.get(caso_id=response.data["id"]).id
+    # el único especialista disponible al momento de crear el caso fue `especialista`
+    assert ColaInterconsulta.objects.get(pk=cola_id).especialista_asignado_id == especialista.id
+
+    response_resolver = api_client_otro.post(f"/api/cola-interconsulta/{cola_id}/resolver/")
+
+    assert response_resolver.status_code == status.HTTP_403_FORBIDDEN
