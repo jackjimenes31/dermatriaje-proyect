@@ -1,5 +1,5 @@
 // DermaTriage Service Worker — Offline-First Strategy
-const CACHE_NAME = 'dermatriage-v4';
+const CACHE_NAME = 'dermatriage-v5';
 const OFFLINE_URL = '/offline/';
 
 // Resources to precache on install (App Shell)
