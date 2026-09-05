@@ -1,1 +1,2 @@
-web: python manage.py migrate && python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); u, _ = User.objects.get_or_create(username='admin', defaults={'email': 'admin@dermatriaje.com'}); u.set_password('AdminDermatriaje2026!'); u.is_staff = True; u.is_superuser = True; u.save()" && gunicorn dermatriaje.wsgi:application
+release: python manage.py migrate && python manage.py seed
+web: gunicorn dermatriaje.wsgi:application
