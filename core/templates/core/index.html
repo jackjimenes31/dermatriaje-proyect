@@ -1,0 +1,172 @@
+{% extends "core/base.html" %}
+
+{% block title %}DermaTriage — Panel{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="logo-group">
+                <div class="logo-icon">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="14" stroke="url(#grad)" stroke-width="2.5" fill="none"/>
+                        <circle cx="16" cy="16" r="6" fill="url(#grad)"/>
+                        <defs>
+                            <linearGradient id="grad" x1="0" y1="0" x2="32" y2="32">
+                                <stop offset="0%" stop-color="#818cf8"/>
+                                <stop offset="100%" stop-color="#6366f1"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="logo-text">DermaTriage</h1>
+            </div>
+            <nav class="header-nav">
+                <span class="user-badge">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user.username }}
+                </span>
+                <a href="{% url 'logout' %}" class="btn btn-ghost btn-sm">Salir</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+        <!-- Status bar -->
+        <div class="status-bar">
+            <div class="status-dot online" id="statusDot"></div>
+            <span class="status-text" id="statusText">En línea</span>
+        </div>
+
+        <!-- Upload Zone -->
+        <section class="card card-glass upload-zone" id="uploadZone">
+            <div class="upload-content">
+                <div class="upload-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </div>
+                <h2>Subir imagen de la lesión</h2>
+                <p class="text-muted">Arrastra una foto o toca para seleccionar</p>
+                <input type="file" id="imageInput" accept="image/*" capture="environment" hidden>
+                <button class="btn btn-primary" id="selectImageBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    Seleccionar imagen
+                </button>
+            </div>
+        </section>
+
+        <!-- Preview (hidden by default) -->
+        <section class="card card-glass preview-section" id="previewSection" style="display:none;">
+            <img id="previewImage" alt="Vista previa" class="preview-image">
+            <div class="preview-actions">
+                <button class="btn btn-primary" id="analyzeBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    Analizar con IA
+                </button>
+                <button class="btn btn-ghost" id="cancelBtn">Cancelar</button>
+            </div>
+        </section>
+
+        <!-- Results (hidden by default) -->
+        <section class="card card-glass results-section" id="resultsSection" style="display:none;">
+            <div class="results-header">
+                <h2>Resultado del Análisis</h2>
+                <div class="priority-badge" id="priorityBadge">—</div>
+            </div>
+            <div class="results-body" id="resultsBody">
+                <!-- Dynamic results -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <p>&copy; 2026 DermaTriage — Clasificación con IA</p>
+    </footer>
+</div>
+
+<script>
+    // ---- Online/Offline status ----
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    function updateOnlineStatus() {
+        if (navigator.onLine) {
+            statusDot.classList.add('online');
+            statusDot.classList.remove('offline');
+            statusText.textContent = 'En línea';
+        } else {
+            statusDot.classList.remove('online');
+            statusDot.classList.add('offline');
+            statusText.textContent = 'Sin conexión (modo offline)';
+        }
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+
+    // ---- Image Upload ----
+    const uploadZone = document.getElementById('uploadZone');
+    const imageInput = document.getElementById('imageInput');
+    const selectImageBtn = document.getElementById('selectImageBtn');
+    const previewSection = document.getElementById('previewSection');
+    const previewImage = document.getElementById('previewImage');
+    const cancelBtn = document.getElementById('cancelBtn');
+
+    selectImageBtn.addEventListener('click', () => imageInput.click());
+
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('drag-over');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('drag-over');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            showPreview(file);
+        }
+    });
+
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) showPreview(file);
+    });
+
+    function showPreview(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImage.src = e.target.result;
+            uploadZone.style.display = 'none';
+            previewSection.style.display = 'block';
+            previewSection.classList.add('fade-in');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    cancelBtn.addEventListener('click', () => {
+        previewSection.style.display = 'none';
+        uploadZone.style.display = 'block';
+        imageInput.value = '';
+    });
+</script>
+{% endblock %}
