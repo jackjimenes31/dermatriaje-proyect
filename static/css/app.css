@@ -735,6 +735,10 @@ img {
     color: var(--color-text-secondary);
 }
 
+.recent-actions {
+    margin-left: var(--space-6);
+}
+
 /* ============================================
    Bandeja del especialista (cola de interconsulta)
    ============================================ */

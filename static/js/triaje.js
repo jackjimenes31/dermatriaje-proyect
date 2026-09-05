@@ -278,6 +278,7 @@ async function cargarUltimasEvaluaciones(profesionalId) {
                 const info = TIPO_LESION_INFO.find((t) => t.code === c.tipo_lesion_predicho);
                 const riesgoClase = 'riesgo-' + c.clasificacion_riesgo.toLowerCase();
                 const tieneRespuesta = c.estado === 'RESUELTO_INTERCONSULTA' && c.observaciones_especialista;
+                const pendienteLocal = c.estado === 'REGISTRADO';
                 return `
                     <div class="recent-item">
                         <span class="recent-dot ${riesgoClase}"></span>
@@ -289,11 +290,31 @@ async function cargarUltimasEvaluaciones(profesionalId) {
                         <div class="recent-resolucion">
                             <strong>${escapeHtml(c.profesional_resuelve_nombre || 'Especialista')}:</strong>
                             ${escapeHtml(c.observaciones_especialista)}
-                        </div>` : ''}`;
+                        </div>` : ''}
+                    ${pendienteLocal ? `
+                        <div class="recent-actions">
+                            <button class="btn btn-ghost btn-sm" data-action="resolver-local" data-caso-id="${c.id}">Marcar como resuelto</button>
+                        </div>` : ''}
+                    ${c.estado === 'RESUELTO_LOCAL' ? `
+                        <div class="recent-resolucion">✓ Resuelto en el mismo nivel</div>` : ''}`;
             })
             .join('');
     } catch (err) {
         list.innerHTML = '<p class="text-muted" style="font-size:var(--font-size-sm);">No se pudieron cargar las evaluaciones recientes.</p>';
+    }
+}
+
+async function resolverLocal(casoId, profesionalId) {
+    try {
+        await apiFetch(`/api/casos-triaje/${casoId}/resolver_local/`, { method: 'POST' });
+        mostrarToast('Caso resuelto', 'Se marcó como resuelto en el mismo nivel.');
+        cargarUltimasEvaluaciones(profesionalId);
+    } catch (err) {
+        if (err.isNetworkError || !navigator.onLine) {
+            mostrarToast('Sin conexión', 'Esta acción requiere conexión a Internet. Intenta de nuevo.');
+        } else {
+            mostrarToast('Ocurrió un error', (err.data && err.data.detail) || 'Intenta de nuevo.');
+        }
     }
 }
 
@@ -551,6 +572,15 @@ document.addEventListener('DOMContentLoaded', () => {
         guardarCasoBtn.addEventListener('click', guardarCaso);
         cargarEstablecimientos(guardarCasoBtn.dataset.establecimientoId);
         cargarUltimasEvaluaciones(guardarCasoBtn.dataset.profesionalId);
+    }
+
+    const recentList = document.getElementById('recentList');
+    if (recentList && guardarCasoBtn) {
+        recentList.addEventListener('click', (event) => {
+            const btn = event.target.closest('[data-action="resolver-local"]');
+            if (!btn) return;
+            resolverLocal(btn.dataset.casoId, guardarCasoBtn.dataset.profesionalId);
+        });
     }
 
     sincronizarPendientes();
