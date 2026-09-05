@@ -41,6 +41,19 @@ class CasoTriajeSerializer(serializers.ModelSerializer):
 
 
 class ColaInterconsultaSerializer(serializers.ModelSerializer):
+    caso_detalle = serializers.SerializerMethodField()
+
     class Meta:
         model = ColaInterconsulta
         fields = '__all__'
+
+    def get_caso_detalle(self, obj):
+        caso = obj.caso
+        return {
+            'paciente': str(caso.paciente),
+            'tipo_lesion_predicho': caso.tipo_lesion_predicho,
+            'tipo_lesion_predicho_display': caso.get_tipo_lesion_predicho_display(),
+            'confianza_modelo': caso.confianza_modelo,
+            'notas_clinicas': caso.notas_clinicas,
+            'establecimiento': caso.establecimiento.nombre,
+        }
