@@ -10,8 +10,13 @@ Requiere: pytest, pytest-django, djangorestframework (ya instalados en el venv).
 Este archivo reemplaza al test_integration.py de placeholder.
 """
 
+import io
+import json
+
 import pytest
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -22,6 +27,14 @@ from interconsulta.models import (
     Paciente,
     Profesional,
 )
+
+
+def _imagen_prueba():
+    """Genera un JPEG chico y válido en memoria (CasoTriaje.imagen es obligatorio)."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (10, 10), color="red").save(buffer, format="JPEG")
+    buffer.seek(0)
+    return SimpleUploadedFile("lesion.jpg", buffer.read(), content_type="image/jpeg")
 
 
 @pytest.fixture
@@ -130,7 +143,8 @@ def test_crear_caso_triaje_happy_path(api_client, paciente, profesional, estable
     """
     Camino feliz del núcleo clínico del producto: registrar un caso de triaje
     con una lesión de alto riesgo y verificar que el sistema calcula
-    correctamente el nivel de riesgo sugerido (campo read-only).
+    correctamente el nivel de riesgo sugerido (campo read-only). La imagen es
+    obligatoria, así que el POST va como multipart/form-data.
     """
     payload = {
         "paciente": paciente.id,
@@ -138,20 +152,26 @@ def test_crear_caso_triaje_happy_path(api_client, paciente, profesional, estable
         "establecimiento": establecimiento.id,
         "tipo_lesion_predicho": "mel",
         "confianza_modelo": 0.92,
-        "probabilidades_top3": [
+        "probabilidades_top3": json.dumps([
             {"tipo": "mel", "confianza": 0.92},
             {"tipo": "nv", "confianza": 0.05},
-        ],
+        ]),
         "clasificacion_riesgo": "ALTO",
         "notas_clinicas": "Lesión sospechosa en brazo derecho",
+        "imagen": _imagen_prueba(),
     }
 
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
 
     assert response.status_code == status.HTTP_201_CREATED
     # 'mel' debe mapear automáticamente a riesgo_sugerido = 'ALTO'
     assert response.data["riesgo_sugerido"] == "ALTO"
     assert response.data["estado"] == "REGISTRADO"
+    assert response.data["probabilidades_top3"] == [
+        {"tipo": "mel", "confianza": 0.92},
+        {"tipo": "nv", "confianza": 0.05},
+    ]
+    assert response.data["imagen"]
     assert CasoTriaje.objects.filter(paciente=paciente).exists()
 
 
@@ -199,9 +219,10 @@ def test_crear_caso_triaje_paciente_inexistente_error_critico(
         "tipo_lesion_predicho": "mel",
         "confianza_modelo": 0.92,
         "clasificacion_riesgo": "ALTO",
+        "imagen": _imagen_prueba(),
     }
 
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "paciente" in response.data
@@ -220,6 +241,7 @@ def _payload_caso(paciente, profesional, establecimiento, tipo_lesion, riesgo):
         "tipo_lesion_predicho": tipo_lesion,
         "confianza_modelo": 0.9,
         "clasificacion_riesgo": riesgo,
+        "imagen": _imagen_prueba(),
     }
 
 
@@ -233,7 +255,7 @@ def test_caso_riesgo_alto_encola_automaticamente(
     mostrando el estado previo a la actualización, ver test happy path).
     """
     payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
     caso_id = response.data["id"]
 
     cola = ColaInterconsulta.objects.get(caso_id=caso_id)
@@ -246,7 +268,7 @@ def test_caso_riesgo_alto_encola_automaticamente(
 def test_caso_riesgo_bajo_no_se_encola(api_client, paciente, profesional, establecimiento):
     """Un caso BAJO se resuelve en el mismo nivel: no debe generar interconsulta."""
     payload = _payload_caso(paciente, profesional, establecimiento, "nv", "BAJO")
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
     caso_id = response.data["id"]
 
     assert not ColaInterconsulta.objects.filter(caso_id=caso_id).exists()
@@ -269,6 +291,7 @@ def test_asignacion_automatica_por_menor_carga(
         tipo_lesion_predicho="nv",
         confianza_modelo=0.8,
         clasificacion_riesgo="BAJO",  # no dispara el signal de encolamiento
+        imagen=_imagen_prueba(),
     )
     ColaInterconsulta.objects.create(
         caso=caso_previo,
@@ -278,7 +301,7 @@ def test_asignacion_automatica_por_menor_carga(
     )
 
     payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
     caso_id = response.data["id"]
 
     cola = ColaInterconsulta.objects.get(caso_id=caso_id)
@@ -289,10 +312,10 @@ def test_asignacion_automatica_por_menor_carga(
 def test_cola_ordenada_por_prioridad(api_client, paciente, profesional, establecimiento):
     """La cola debe devolver primero URGENTE aunque se haya creado después que ALTA."""
     payload_medio = _payload_caso(paciente, profesional, establecimiento, "bkl", "MEDIO")
-    api_client.post("/api/casos-triaje/", payload_medio, format="json")
+    api_client.post("/api/casos-triaje/", payload_medio, format="multipart")
 
     payload_alto = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
-    response_alto = api_client.post("/api/casos-triaje/", payload_alto, format="json")
+    response_alto = api_client.post("/api/casos-triaje/", payload_alto, format="multipart")
     caso_alto_id = response_alto.data["id"]
 
     response = api_client.get("/api/cola-interconsulta/")
@@ -308,7 +331,7 @@ def test_especialista_atiende_y_resuelve_caso(
 ):
     """Loop completo: atender pasa a EN_ATENCION, resolver cierra cola y caso."""
     payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
     caso_id = response.data["id"]
     cola_id = ColaInterconsulta.objects.get(caso_id=caso_id).id
 
@@ -330,6 +353,23 @@ def test_especialista_atiende_y_resuelve_caso(
     assert caso.fecha_resolucion is not None
 
 
+@pytest.mark.django_db
+def test_caso_detalle_incluye_url_de_imagen(
+    api_client, api_client_especialista, paciente, profesional, establecimiento, especialista
+):
+    """La bandeja del especialista debe poder mostrar la imagen del caso."""
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
+    cola_id = ColaInterconsulta.objects.get(caso_id=response.data["id"]).id
+
+    response_mia = api_client_especialista.get("/api/cola-interconsulta/mia/")
+
+    assert response_mia.status_code == status.HTTP_200_OK
+    item = next(i for i in response_mia.data if i["id"] == cola_id)
+    assert item["caso_detalle"]["imagen_url"]
+    assert "/media/" in item["caso_detalle"]["imagen_url"]
+
+
 # ---------------------------------------------------------------------------
 # COLA DE INTERCONSULTA — CASOS DE ERROR CRÍTICO
 # ---------------------------------------------------------------------------
@@ -343,7 +383,7 @@ def test_medico_general_no_puede_atender_interconsulta(
     hacerlo, se rompe la separación de responsabilidades del triaje escalonado.
     """
     payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
     cola_id = ColaInterconsulta.objects.get(caso_id=response.data["id"]).id
 
     response_atender = api_client.post(f"/api/cola-interconsulta/{cola_id}/atender/")
@@ -365,7 +405,7 @@ def test_especialista_no_asignado_no_puede_resolver(
     api_client_otro.force_authenticate(user=otro_especialista.user)
 
     payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
-    response = api_client.post("/api/casos-triaje/", payload, format="json")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
     cola_id = ColaInterconsulta.objects.get(caso_id=response.data["id"]).id
     # el único especialista disponible al momento de crear el caso fue `especialista`
     assert ColaInterconsulta.objects.get(pk=cola_id).especialista_asignado_id == especialista.id

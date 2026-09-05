@@ -143,6 +143,7 @@ class CasoTriaje(models.Model):
         EstablecimientoSalud, on_delete=models.PROTECT, related_name='casos'
     )
     fecha_evaluacion = models.DateTimeField(auto_now_add=True)
+    imagen = models.ImageField(upload_to='casos/%Y/%m/')
     tipo_lesion_predicho = models.CharField(max_length=5, choices=TipoLesion.choices)
     confianza_modelo = models.FloatField(
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]

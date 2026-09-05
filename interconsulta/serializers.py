@@ -56,4 +56,5 @@ class ColaInterconsultaSerializer(serializers.ModelSerializer):
             'confianza_modelo': caso.confianza_modelo,
             'notas_clinicas': caso.notas_clinicas,
             'establecimiento': caso.establecimiento.nombre,
+            'imagen_url': caso.imagen.url if caso.imagen else None,
         }
