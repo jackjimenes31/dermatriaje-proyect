@@ -28,6 +28,14 @@ def especialista_view(request):
     return render(request, 'core/especialista.html')
 
 
+@login_required
+def especialista_caso_view(request, cola_id):
+    """Detalle de un caso de la bandeja: imagen, info completa, atender/resolver."""
+    if not _es_especialista(request.user):
+        return redirect('index')
+    return render(request, 'core/especialista_caso.html', {'cola_id': cola_id})
+
+
 def login_view(request):
     """Vista de inicio de sesión."""
     if request.user.is_authenticated:

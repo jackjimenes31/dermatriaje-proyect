@@ -1,9 +1,9 @@
 {% extends "core/base.html" %}
 
-{% block title %}DermaTriage — Bandeja del especialista{% endblock %}
+{% block title %}DermaTriage — Detalle del caso{% endblock %}
 
 {% block body %}
-<div class="app-shell">
+<div class="app-shell" data-cola-id="{{ cola_id }}">
     <!-- Header -->
     <header class="app-header">
         <div class="header-inner">
@@ -38,23 +38,19 @@
     <!-- Main Content -->
     <main class="app-main">
         <div class="results-header">
-            <div>
-                <p class="hero-eyebrow">Bandeja de interconsulta</p>
-                <h2 class="hero-title">Casos asignados a ti</h2>
-            </div>
-            <div class="offline-badge" id="connectionBadge">
-                <span class="dot"></span>
-                <span id="connectionBadgeText">EN LÍNEA</span>
-            </div>
+            <a class="back-btn" href="{% url 'especialista' %}" aria-label="Volver a la bandeja">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+            </a>
+            <p class="hero-eyebrow" style="margin:0;">DETALLE DEL CASO</p>
+            <span style="width:36px;"></span>
         </div>
-        <p class="hero-subtitle" style="margin-top:calc(-1 * var(--space-3)); margin-bottom: var(--space-4);">
-            Revisión asíncrona: atiende un caso cuando puedas, sin necesidad de agendar una cita.
-        </p>
 
-        <div class="queue-list" id="queueList">
-            <p class="text-muted" id="queueEmptyMessage" style="font-size:var(--font-size-sm); display:none;">
-                No tienes casos pendientes en tu bandeja.
-            </p>
+        {% csrf_token %}
+        <div id="casoDetalle">
+            <p class="text-muted" style="font-size:var(--font-size-sm);">Cargando caso…</p>
         </div>
     </main>
 
@@ -79,5 +75,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/especialista.js"></script>
+<script src="/static/js/especialista_caso.js"></script>
 {% endblock %}
