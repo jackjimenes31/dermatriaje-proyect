@@ -34,10 +34,21 @@ class PacienteSerializer(serializers.ModelSerializer):
 
 class CasoTriajeSerializer(serializers.ModelSerializer):
     riesgo_sugerido = serializers.ReadOnlyField()
+    profesional_resuelve_nombre = serializers.SerializerMethodField()
+    observaciones_especialista = serializers.SerializerMethodField()
 
     class Meta:
         model = CasoTriaje
         fields = '__all__'
+
+    def get_profesional_resuelve_nombre(self, obj):
+        return str(obj.profesional_resuelve) if obj.profesional_resuelve else None
+
+    def get_observaciones_especialista(self, obj):
+        try:
+            return obj.cola_interconsulta.observaciones_especialista
+        except ColaInterconsulta.DoesNotExist:
+            return None
 
 
 class ColaInterconsultaSerializer(serializers.ModelSerializer):

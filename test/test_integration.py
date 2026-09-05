@@ -354,6 +354,50 @@ def test_especialista_atiende_y_resuelve_caso(
 
 
 @pytest.mark.django_db
+def test_caso_triaje_expone_respuesta_del_especialista(
+    api_client, api_client_especialista, paciente, profesional, establecimiento, especialista
+):
+    """
+    Cierra el loop: el médico que originó el caso debe poder ver, vía
+    /api/casos-triaje/, quién lo resolvió y qué recomendó el especialista.
+    """
+    payload = _payload_caso(paciente, profesional, establecimiento, "mel", "ALTO")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
+    caso_id = response.data["id"]
+    cola_id = ColaInterconsulta.objects.get(caso_id=caso_id).id
+
+    api_client_especialista.post(f"/api/cola-interconsulta/{cola_id}/atender/")
+    api_client_especialista.post(
+        f"/api/cola-interconsulta/{cola_id}/resolver/",
+        {"observaciones_especialista": "Confirmo sospecha de melanoma, derivar a biopsia urgente."},
+        format="json",
+    )
+
+    response_caso = api_client.get(f"/api/casos-triaje/{caso_id}/")
+
+    assert response_caso.status_code == status.HTTP_200_OK
+    assert response_caso.data["observaciones_especialista"] == (
+        "Confirmo sospecha de melanoma, derivar a biopsia urgente."
+    )
+    assert response_caso.data["profesional_resuelve_nombre"] == str(especialista)
+
+
+@pytest.mark.django_db
+def test_caso_triaje_bajo_riesgo_sin_respuesta_de_especialista(
+    api_client, paciente, profesional, establecimiento
+):
+    """Un caso BAJO nunca tuvo ColaInterconsulta: no debe romper, debe devolver None."""
+    payload = _payload_caso(paciente, profesional, establecimiento, "nv", "BAJO")
+    response = api_client.post("/api/casos-triaje/", payload, format="multipart")
+
+    response_caso = api_client.get(f"/api/casos-triaje/{response.data['id']}/")
+
+    assert response_caso.status_code == status.HTTP_200_OK
+    assert response_caso.data["observaciones_especialista"] is None
+    assert response_caso.data["profesional_resuelve_nombre"] is None
+
+
+@pytest.mark.django_db
 def test_caso_detalle_incluye_url_de_imagen(
     api_client, api_client_especialista, paciente, profesional, establecimiento, especialista
 ):

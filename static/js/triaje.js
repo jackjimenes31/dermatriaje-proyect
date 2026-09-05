@@ -109,6 +109,12 @@ function getCookie(name) {
     return match ? decodeURIComponent(match[2]) : null;
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
 async function apiFetch(url, options) {
     options = options || {};
     const esFormData = options.body instanceof FormData;
@@ -271,13 +277,19 @@ async function cargarUltimasEvaluaciones(profesionalId) {
             .map((c) => {
                 const info = TIPO_LESION_INFO.find((t) => t.code === c.tipo_lesion_predicho);
                 const riesgoClase = 'riesgo-' + c.clasificacion_riesgo.toLowerCase();
+                const tieneRespuesta = c.estado === 'RESUELTO_INTERCONSULTA' && c.observaciones_especialista;
                 return `
                     <div class="recent-item">
                         <span class="recent-dot ${riesgoClase}"></span>
                         <span class="recent-label">${info ? info.label : c.tipo_lesion_predicho}</span>
                         <span class="recent-time">${tiempoRelativo(c.fecha_evaluacion)}</span>
                         <span class="recent-badge ${riesgoClase}">${c.clasificacion_riesgo}</span>
-                    </div>`;
+                    </div>
+                    ${tieneRespuesta ? `
+                        <div class="recent-resolucion">
+                            <strong>${escapeHtml(c.profesional_resuelve_nombre || 'Especialista')}:</strong>
+                            ${escapeHtml(c.observaciones_especialista)}
+                        </div>` : ''}`;
             })
             .join('');
     } catch (err) {
