@@ -14,6 +14,7 @@ db.sqlite3-journal
 
 .env
 .env.*
+!.env.example
 
 staticfiles/
 static_root/
@@ -22,6 +23,7 @@ media/
 
 .vscode/
 .idea/
+.claude/
 
 .DS_Store
 Thumbs.db
