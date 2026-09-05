@@ -122,6 +122,7 @@ class CasoTriaje(models.Model):
         REGISTRADO = 'REGISTRADO', 'Registrado'
         RESUELTO_LOCAL = 'RESUELTO_LOCAL', 'Resuelto en el mismo nivel'
         EN_COLA_INTERCONSULTA = 'EN_COLA_INTERCONSULTA', 'En cola de interconsulta'
+        RESUELTO_INTERCONSULTA = 'RESUELTO_INTERCONSULTA', 'Resuelto por interconsulta'
 
     # Mapeo entre el tipo de lesion y nivel de riesgo
     RIESGO_POR_TIPO_LESION = {
