@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![Django](https://img.shields.io/badge/Django-6.1-green.svg)
 ![DRF](https://img.shields.io/badge/Django_REST_Framework-3.18-red.svg)
-![Testing](https://img.shields.io/badge/PyTest-13%2F13_Passed-success.svg)
+![Testing](https://img.shields.io/badge/PyTest-26%2F26_Passed-success.svg)
 ![Deploy](https://img.shields.io/badge/Deploy-Render_Active-brightgreen.svg)
 
 **DermaTriaje** es una Progressive Web App (PWA) de tele-interconsulta y triaje dermatológico asistido por Inteligencia Artificial (*Edge AI*, offline-first) diseñada para el personal de salud del primer nivel de atención en Perú (postas y centros de salud I-1 a I-4).
@@ -16,9 +16,9 @@ El sistema ejecuta el modelo de clasificación de lesiones en el navegador del u
 ## 📌 Entregables Oficiales
 
 * 🌐 **URL de Producción Activa:** [https://dermatriaje-proyect.onrender.com/](https://dermatriaje-proyect.onrender.com/)
-* 📊 **Deck de Presentación (Pitch):** [`docs/pitch.pdf`](docs/pitch.pdf)
+* 📊 **Deck de Presentación (Pitch):** [`docs/pitch.md`](docs/pitch.md)
 * 📋 **Especificación Técnica de la API:** [`endpoints_spec.md`](endpoints_spec.md)
-* 🧪 **Suite de Pruebas Automáticas (Testing Core):** [`test/`](test/) (13/13 pruebas aprobadas)
+* 🧪 **Suite de Pruebas Automáticas (Testing Core):** [`test/`](test/) (26/26 pruebas aprobadas)
 
 ---
 
@@ -31,6 +31,8 @@ El sistema ejecuta el modelo de clasificación de lesiones en el navegador del u
 * **Autenticación:**
   * **Sesión Web:** Login/Registro estándar para el flujo de la PWA.
   * **Token DRF:** `POST /api/auth/login/` con `TokenAuthentication` para integración de clientes externos.
+* **Roles y flujos diferenciados:** cada `Profesional` tiene un rol (Médico General, Serumista o Especialista). Al loguearse, un médico general cae en `/` (captura y clasificación de casos) y un especialista es redirigido a `/especialista/` (bandeja de interconsulta priorizada, con vista de detalle por caso e imagen).
+* **Cola de interconsulta:** los casos de riesgo ALTO/MEDIO se encolan automáticamente (signal de Django) con prioridad URGENTE/ALTA y se asignan al especialista con menor carga de trabajo; los casos de riesgo BAJO pueden resolverse localmente por el médico que los registró.
 * **Integración Continua:** GitHub Actions (`.github/workflows/ci.yml`) ejecutando la suite completa de pruebas en cada `push` y `pull request`.
 
 ---
@@ -60,7 +62,7 @@ dermatriaje-api/
 
 ## 🧪 Testing Core (Pruebas Automáticas)
 
-El proyecto cuenta con una suite rigurosa de **13 pruebas automatizadas** que validan tanto el comportamiento esperado como la robustez ante fallos críticos:
+El proyecto cuenta con una suite rigurosa de **26 pruebas automatizadas** que validan tanto el comportamiento esperado como la robustez ante fallos críticos, incluyendo el ciclo completo de la cola de interconsulta (encolamiento automático por riesgo, asignación por menor carga, orden por prioridad, permisos de atender/resolver) y la resolución local de casos de bajo riesgo.
 
 ### 1. Camino Feliz (Happy Path)
 * **Creación de Paciente:** Registro vía API (`POST /api/pacientes/`) con datos válidos, validando persistencia y código de estado `201 Created`.
