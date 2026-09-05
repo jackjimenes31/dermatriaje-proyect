@@ -19,10 +19,10 @@ class Command(BaseCommand):
         self._crear_admin()
         posta, hospital = self._crear_establecimientos()
         self._crear_profesional(
-            'medico1', 'medico12345', Profesional.Rol.MEDICO_GENERAL, posta, 'Medicina general'
+            'jack', 'jack123', Profesional.Rol.MEDICO_GENERAL, posta, 'Medicina general'
         )
         self._crear_profesional(
-            'mhuaman', 'mhuaman12345', Profesional.Rol.ESPECIALISTA, hospital, 'Dermatologia'
+            'santiago', 'santiago123', Profesional.Rol.ESPECIALISTA, hospital, 'Dermatologia'
         )
         self._crear_pacientes()
         self.stdout.write(self.style.SUCCESS('Datos iniciales listos.'))
