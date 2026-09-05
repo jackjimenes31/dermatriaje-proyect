@@ -90,6 +90,63 @@
                 <!-- Dynamic results -->
             </div>
         </section>
+
+        <!-- Guardar caso (hidden hasta tener un resultado de IA) -->
+        <section class="card card-glass" id="saveCaseSection" style="display:none;" data-profesional-id="{{ request.user.profesional.id }}">
+            {% csrf_token %}
+            <h2>Registrar caso</h2>
+            <p class="text-muted">Completa los datos del paciente para guardar este caso en el sistema.</p>
+
+            <div class="form-group">
+                <label for="tipoDocumento">Tipo de documento</label>
+                <select id="tipoDocumento" class="form-input">
+                    <option value="DNI">DNI</option>
+                    <option value="CE">Carné de Extranjería</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="numeroDocumento">Número de documento</label>
+                <input type="text" id="numeroDocumento" class="form-input" placeholder="12345678">
+            </div>
+            <div class="form-group">
+                <label for="nombresPaciente">Nombres</label>
+                <input type="text" id="nombresPaciente" class="form-input">
+            </div>
+            <div class="form-group">
+                <label for="apellidosPaciente">Apellidos</label>
+                <input type="text" id="apellidosPaciente" class="form-input">
+            </div>
+            <div class="form-group">
+                <label for="edadPaciente">Edad</label>
+                <input type="number" id="edadPaciente" class="form-input" min="0" max="120">
+            </div>
+            <div class="form-group">
+                <label for="sexoPaciente">Sexo</label>
+                <select id="sexoPaciente" class="form-input">
+                    <option value="M">Masculino</option>
+                    <option value="F">Femenino</option>
+                    <option value="OTRO">Otro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="establecimientoCaso">Establecimiento</label>
+                <select id="establecimientoCaso" class="form-input"></select>
+            </div>
+            <div class="form-group">
+                <label for="riesgoConfirmado">Clasificación de riesgo (confirmar)</label>
+                <select id="riesgoConfirmado" class="form-input">
+                    <option value="BAJO">Bajo riesgo</option>
+                    <option value="MEDIO">Riesgo medio</option>
+                    <option value="ALTO">Alto riesgo</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="notasClinicas">Notas clínicas (opcional)</label>
+                <textarea id="notasClinicas" class="form-input" rows="2"></textarea>
+            </div>
+            <div id="saveCaseMessage" class="form-error" style="display:none;"></div>
+            <button class="btn btn-primary btn-full" id="guardarCasoBtn">Guardar caso</button>
+        </section>
     </main>
 
     <!-- Footer -->
@@ -167,6 +224,13 @@
         previewSection.style.display = 'none';
         uploadZone.style.display = 'block';
         imageInput.value = '';
+        document.getElementById('resultsSection').style.display = 'none';
+        document.getElementById('saveCaseSection').style.display = 'none';
     });
 </script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js"></script>
+<script src="/static/js/triaje.js"></script>
 {% endblock %}
