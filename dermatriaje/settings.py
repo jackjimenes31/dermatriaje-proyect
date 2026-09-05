@@ -31,6 +31,10 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-v60#l%*2a95pd+=)%70ra4!i
 DEBUG = env.bool('DEBUG', default=True)
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '.onrender.com'])
+if '.onrender.com' not in ALLOWED_HOSTS and '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.onrender.com')
+
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=['https://*.onrender.com', 'https://127.0.0.1', 'http://localhost'])
 
 
 # Application definition
