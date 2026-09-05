@@ -139,6 +139,16 @@ pytest --cov=interconsulta --cov=core
    ```
    Accede a la aplicación en: `http://127.0.0.1:8000/`.
 
+### Cuentas de prueba (creadas por `python manage.py seed`)
+
+| Usuario | Contraseña | Rol | Flujo al loguearse |
+|---|---|---|---|
+| `jack` | `jack123` | Médico general | `/` — capturar/clasificar una lesión y guardar el caso |
+| `santiago` | `santiago123` | Especialista | `/especialista/` — bandeja de interconsulta priorizada |
+| `admin` | `admin123` | Superusuario | `/admin/` — Django admin (gestión completa de datos) |
+
+`jack` está asociado a la Posta de Salud San Juan y `santiago` al Hospital Regional del Cusco, así que un caso de riesgo ALTO/MEDIO creado por `jack` se autoencola y aparece directo en la bandeja de `santiago`.
+
 ---
 
 ## 🌐 Despliegue en Producción (Render)
