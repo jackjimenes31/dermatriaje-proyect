@@ -726,6 +726,48 @@ img {
 }
 
 /* ============================================
+   Bandeja del especialista (cola de interconsulta)
+   ============================================ */
+.priority-badge.urgente { background: var(--color-red); }
+.priority-badge.alta { background: var(--color-yellow); }
+.priority-badge.media { background: var(--color-green); }
+
+.queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.queue-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.queue-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.queue-meta {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.queue-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+.observaciones-input {
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* ============================================
    Toast (snackbar de confirmacion)
    ============================================ */
 .toast {
